@@ -5,12 +5,18 @@ import {
 	Modal,
 	Notice,
 	Plugin,
+	ItemView,
+	WorkspaceLeaf
 } from 'obsidian';
 import {
 	DEFAULT_SETTINGS,
 	MyPluginSettings,
 	SampleSettingTab,
 } from './settings';
+
+// graph 
+import cytoscape from "cytoscape";
+
 
 // Remember to rename these classes and interfaces!
 
@@ -84,7 +90,38 @@ export default class Visionary extends Plugin {
 		this.registerInterval(
 			window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000),
 		);
+
+		// HEREEE
+
+		 this.registerView(
+            VIEW_TYPE_KNOWLEDGE_MAP,
+            (leaf) => new KnowledgeMapView(leaf)
+        );
+
+        this.addCommand({
+            id: "open-knowledge-map",
+            name: "Open knowledge map",
+            callback: () => {
+                // Open your view
+				this.activateView();
+            }
+        });
 	}
+
+		async activateView() {
+			const { workspace } = this.app;
+			const leaves = workspace.getLeavesOfType(VIEW_TYPE_KNOWLEDGE_MAP);
+			let leaf: WorkspaceLeaf | null = null; 
+			if (leaves.length > 0) {
+				leaf = leaves[0];
+			} else {
+				leaf = workspace.getRightLeaf(false);
+				if (!leaf) return;
+				await leaf?.setViewState({type: VIEW_TYPE_KNOWLEDGE_MAP, active: true});
+			}
+
+			workspace.revealLeaf(leaf);
+		}
 
 	onunload() {}
 
@@ -112,3 +149,172 @@ class SampleModal extends Modal {
 		contentEl.empty();
 	}
 }
+
+export type NodeType =
+	| "node"
+	| "category"
+	| "placeholder";
+
+export interface Node {
+	id: string;
+	name: string;
+	color: string;
+	score: number;
+	type: NodeType;
+	parentId?: string;
+}
+export interface KnowledgeNode extends Node {
+	type: "node";
+	categories: string[];
+}
+export interface CategoryNode extends Node{
+	type: "category";
+}
+export interface PlaceholderNode extends Node {
+	type: "placeholder";
+	score: 0;
+}
+export interface CategoryMembership {
+	nodeID: string[];
+	categoryID: string[]
+}
+
+// hard-coded test
+const nodes = [
+    {
+        id: "programming",
+        type: "category",
+        name: "Programming",
+        score: 100,
+    },
+
+    {
+        id: "python",
+        type: "note",
+        name: "Python",
+        score: 50,
+    },
+
+    {
+        id: "rust",
+        type: "note",
+        name: "Rust",
+        score: 20,
+    },
+
+    {
+        id: "compilers",
+        type: "placeholder",
+        name: "Compilers",
+        score: 0,
+    },
+];
+
+const relationships = [
+    {
+        parent: "programming",
+        child: "python",
+    },
+
+    {
+        parent: "programming",
+        child: "rust",
+    },
+
+    {
+        parent: "programming",
+        child: "compilers",
+    },
+];
+
+export const VIEW_TYPE_KNOWLEDGE_MAP = "knowledge-map";
+
+export class KnowledgeMapView extends ItemView {
+
+	private cy?: cytoscape.Core;
+	private graphEl: HTMLElement | null = null;
+
+	constructor(leaf: WorkspaceLeaf) {
+		super(leaf);
+	}
+	
+
+
+    getViewType() {
+        return VIEW_TYPE_KNOWLEDGE_MAP;
+    }
+
+    getDisplayText() {
+        return "Knowledge Map";
+    }
+
+    async onOpen() {
+
+		const container = this.contentEl;
+		container.empty();
+        this.graphEl = container.createDiv({
+            cls: "knowledge-map-container"
+        });
+
+		container.createEl('h4', { text: 'Example view' });
+        const el = this.graphEl;
+		el.setCssProps({
+			width: "100%",
+			height: "500px",
+			// "background-color": "blue",
+		});
+
+		this.cy = cytoscape({
+
+		container: el,//: document.getElementById('cy'), // container to render in
+
+		elements: [ // list of graph elements to start with
+			{ // node a
+			data: { id: 'a' }
+			},
+			{ // node b
+			data: { id: 'b' }
+			},
+			{ // edge ab
+			data: { id: 'ab', source: 'a', target: 'b' }
+			}
+		],
+
+		style: [ // the stylesheet for the graph
+			{
+			selector: 'node',
+			style: {
+				'background-color': '#ac0000',
+				'label': 'data(id)'
+			}
+			},
+
+			{
+			selector: 'edge',
+			style: {
+				'width': 3,
+				'line-color': '#000000',
+				'target-arrow-color': '#000000',
+				'target-arrow-shape': 'triangle',
+				'curve-style': 'bezier'
+			}
+			}
+		],
+
+		layout: {
+			name: 'preset'
+		}
+
+		});
+
+		requestAnimationFrame(() => {
+			this.cy?.resize();
+			this.cy?.fit();
+		});
+    }
+
+    async onClose() {
+        this.cy?.destroy();
+    }
+}
+
