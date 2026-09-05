@@ -14,7 +14,7 @@ import {
 
 // Remember to rename these classes and interfaces!
 
-export default class MyPlugin extends Plugin {
+export default class Visionary extends Plugin {
 	settings!: MyPluginSettings;
 
 	async onload() {
@@ -23,7 +23,7 @@ export default class MyPlugin extends Plugin {
 		// This creates an icon in the left ribbon.
 		this.addRibbonIcon('dice', 'Sample', (_evt: MouseEvent) => {
 			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
+			new Notice('This is a visionary notice!');
 		});
 
 		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
