@@ -14,8 +14,11 @@ import {
 	SampleSettingTab,
 } from './settings';
 
+import {  } from "./nodes";
+import { nodes } from "./data";
 // graph 
 import cytoscape from "cytoscape";
+
 
 
 // Remember to rename these classes and interfaces!
@@ -150,83 +153,6 @@ class SampleModal extends Modal {
 	}
 }
 
-export type NodeType =
-	| "node"
-	| "category"
-	| "placeholder";
-
-export interface Node {
-	id: string;
-	name: string;
-	color: string;
-	score: number;
-	type: NodeType;
-	parentId?: string;
-}
-export interface KnowledgeNode extends Node {
-	type: "node";
-	categories: string[];
-}
-export interface CategoryNode extends Node{
-	type: "category";
-}
-export interface PlaceholderNode extends Node {
-	type: "placeholder";
-	score: 0;
-}
-export interface CategoryMembership {
-	nodeID: string[];
-	categoryID: string[]
-}
-
-// hard-coded test
-const nodes = [
-    {
-        id: "programming",
-        type: "category",
-        name: "Programming",
-        score: 100,
-    },
-
-    {
-        id: "python",
-        type: "note",
-        name: "Python",
-        score: 50,
-    },
-
-    {
-        id: "rust",
-        type: "note",
-        name: "Rust",
-        score: 20,
-    },
-
-    {
-        id: "compilers",
-        type: "placeholder",
-        name: "Compilers",
-        score: 0,
-    },
-];
-
-const relationships = [
-    {
-        parent: "programming",
-        child: "python",
-    },
-
-    {
-        parent: "programming",
-        child: "rust",
-    },
-
-    {
-        parent: "programming",
-        child: "compilers",
-    },
-];
-
 export const VIEW_TYPE_KNOWLEDGE_MAP = "knowledge-map";
 
 export class KnowledgeMapView extends ItemView {
@@ -238,7 +164,11 @@ export class KnowledgeMapView extends ItemView {
 		super(leaf);
 	}
 	
-
+	
+	private options = {
+		name: 'preset',
+		// fit: true,
+	}
 
     getViewType() {
         return VIEW_TYPE_KNOWLEDGE_MAP;
@@ -252,11 +182,11 @@ export class KnowledgeMapView extends ItemView {
 
 		const container = this.contentEl;
 		container.empty();
+		container.createEl('h4', { text: 'Example view' });
         this.graphEl = container.createDiv({
             cls: "knowledge-map-container"
         });
 
-		container.createEl('h4', { text: 'Example view' });
         const el = this.graphEl;
 		el.setCssProps({
 			width: "100%",
@@ -270,46 +200,65 @@ export class KnowledgeMapView extends ItemView {
 
 		elements: [ // list of graph elements to start with
 			{ // node a
-			data: { id: 'a' }
+			data: { id: 'a'}
 			},
 			{ // node b
-			data: { id: 'b' }
+			data: { id: 'b', degree: 1 }
 			},
 			{ // edge ab
-			data: { id: 'ab', source: 'a', target: 'b' }
-			}
+			data: { id: 'ab', source: 'a', target: 'b', degree: 1 }
+			},
+
+			...nodes
 		],
 
 		style: [ // the stylesheet for the graph
 			{
 			selector: 'node',
 			style: {
-				'background-color': '#ac0000',
-				'label': 'data(id)'
+				'background-color': 'data(color)',
+				'label': 'data(id)',
+				'color': 'data(outline_color)', //'#ffffff',
+				'outline-color': "data(outline_color)",
+				"outline-width": 1,
+				"outline-style": "solid",
+				"width": 'data(size)',
+				"height": 'data(size)',
 			}
 			},
-
+			{
+				selector: 'node:parent',
+				style: {
+					'outline-width': 0,
+					'border-width': 0
+				}
+			},
 			{
 			selector: 'edge',
 			style: {
 				'width': 3,
-				'line-color': '#000000',
-				'target-arrow-color': '#000000',
+				'line-color': '#ebff38',
+				'target-arrow-color': '#fa0202',
 				'target-arrow-shape': 'triangle',
 				'curve-style': 'bezier'
 			}
 			}
 		],
 
-		layout: {
-			name: 'preset'
-		}
+		layout:  this.options,
 
 		});
 
-		requestAnimationFrame(() => {
-			this.cy?.resize();
-			this.cy?.fit();
+		// grab all the nodes
+		// and time to build the rest of the stuff!
+		this.cy?.nodes().forEach(node => {
+			const parent = node.parent();
+
+			if (parent.length > 0) {
+				// color settings
+				node.data("color", parent.data("color"));
+				node.data("outline_color", parent.data("outline_color"));
+			}
 		});
     }
 
