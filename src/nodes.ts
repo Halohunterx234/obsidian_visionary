@@ -11,7 +11,7 @@ export interface Node {
 	type: NodeType;
 	parentId?: string;
 }
-export interface KnowledgeNode extends Node {
+export interface DataNode extends Node {
 	type: "node";
 	categories: string[];
 }

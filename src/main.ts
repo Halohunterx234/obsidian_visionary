@@ -114,7 +114,7 @@ export default class Visionary extends Plugin {
 		async activateView() {
 			const { workspace } = this.app;
 			const leaves = workspace.getLeavesOfType(VIEW_TYPE_KNOWLEDGE_MAP);
-			let leaf: WorkspaceLeaf | null = null; 
+			let leaf: WorkspaceLeaf | null | undefined = null; 
 			if (leaves.length > 0) {
 				leaf = leaves[0];
 			} else {
@@ -123,7 +123,7 @@ export default class Visionary extends Plugin {
 				await leaf?.setViewState({type: VIEW_TYPE_KNOWLEDGE_MAP, active: true});
 			}
 
-			workspace.revealLeaf(leaf);
+			if (leaf != undefined) workspace.revealLeaf(leaf);
 		}
 
 	onunload() {}
@@ -199,15 +199,15 @@ export class KnowledgeMapView extends ItemView {
 		container: el,//: document.getElementById('cy'), // container to render in
 
 		elements: [ // list of graph elements to start with
-			{ // node a
-			data: { id: 'a'}
-			},
-			{ // node b
-			data: { id: 'b', degree: 1 }
-			},
-			{ // edge ab
-			data: { id: 'ab', source: 'a', target: 'b', degree: 1 }
-			},
+			// { // node a
+			// data: { id: 'a'}
+			// },
+			// { // node b
+			// data: { id: 'b', degree: 1 }
+			// },
+			// { // edge ab
+			// data: { id: 'ab', source: 'a', target: 'b', degree: 1 }
+			// },
 
 			...nodes
 		],
