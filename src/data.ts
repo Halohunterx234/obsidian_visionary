@@ -1,3 +1,6 @@
+import "./nodes"
+import { BaseNodeData } from "./nodes"
+
 export const config = {
 	"default_node_size": 25,
 }
@@ -11,8 +14,7 @@ export const config = {
 // json version of nodes
 const placeholder_node = {
 	data: {
-		id: '0',
-		name: 'placeholder',
+		id: 'placeholder',
 		color: '#313030',
 		outline_color: '#000000',
 		score: config.default_node_size,
@@ -23,8 +25,7 @@ const placeholder_node = {
 
 const data_node = {
 	data: {
-		id: '0',
-		name: 'data',
+		id: 'data',
 		color: '#313030',
 		outline_color: '#000000',
 		score: config.default_node_size,
@@ -35,8 +36,7 @@ const data_node = {
 
 const category_node = {
 	data: {
-		id: '0',
-		name: 'category',
+		id: 'category',
 		color: '#313030',
 		outline_color: '#000000',
 		score: config.default_node_size,
@@ -53,10 +53,10 @@ export const nodes = [
 	{
 		data: {
 			id: 'programming',
-            type: 'category',
             color: '#5EF527',
             outline_color: '#54c52b',			
 			group: 'programming',
+            type: 'category',
             parent: null,
 		},
 	},
@@ -103,6 +103,33 @@ export const nodes = [
 			size: config.default_node_size,
 			color: '#ff0000'
 		}
-	}
+	},
 	
+	// category and subcategory
+	{
+		data: {
+			id: 'science',
+			color: "#0000ff"
+		}
+	},
+	{
+		data: {
+			id: 'biology',
+			parent: 'science',
+			color: "#af03fe",
+			type: "category"
+		}
+	},
+	{
+		data: {
+			id: 'fire',
+			parent: 'science'
+		}
+	},
+	{
+		data: {
+			id: "cell",
+			parent: 'biology'
+		}
+	}
 ];

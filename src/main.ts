@@ -6,7 +6,8 @@ import {
 	Notice,
 	Plugin,
 	ItemView,
-	WorkspaceLeaf
+	WorkspaceLeaf,
+	TFile
 } from 'obsidian';
 import {
 	DEFAULT_SETTINGS,
@@ -109,22 +110,51 @@ export default class Visionary extends Plugin {
 				this.activateView();
             }
         });
+
+		// the list of nodes
+		const nodes = [];
+
+		// go through each markdown file
+		const result = await this.loadFiles();
+
 	}
 
-		async activateView() {
-			const { workspace } = this.app;
-			const leaves = workspace.getLeavesOfType(VIEW_TYPE_KNOWLEDGE_MAP);
-			let leaf: WorkspaceLeaf | null | undefined = null; 
-			if (leaves.length > 0) {
-				leaf = leaves[0];
-			} else {
-				leaf = workspace.getRightLeaf(false);
-				if (!leaf) return;
-				await leaf?.setViewState({type: VIEW_TYPE_KNOWLEDGE_MAP, active: true});
-			}
+	async loadFiles(): Promise<null> {
+		const { vault } = this.app;
+		const fileContents = await Promise.all(
+			vault.getMarkdownFiles().map(async (file) => {
+				return {
+					"path": file.path,
+					"character count": (await vault.cachedRead(file)).length,
+					"parent": file.parent?.path,
+					"name": file.basename
+				}
+			})
+		);
 
-			if (leaf != undefined) workspace.revealLeaf(leaf);
+		fileContents.forEach((content) => {
+			console.log("Path:", content.path);
+			console.log("Character count:", content["character count"]);
+			console.log("Parent:", content.parent);
+			console.log("Name:", content.name);
+		});
+		return null;
+	}
+
+	async activateView() {
+		const { workspace } = this.app;
+		const leaves = workspace.getLeavesOfType(VIEW_TYPE_KNOWLEDGE_MAP);
+		let leaf: WorkspaceLeaf | null | undefined = null; 
+		if (leaves.length > 0) {
+			leaf = leaves[0];
+		} else {
+			leaf = workspace.getRightLeaf(false);
+			if (!leaf) return;
+			await leaf?.setViewState({type: VIEW_TYPE_KNOWLEDGE_MAP, active: true});
 		}
+
+		if (leaf != undefined) workspace.revealLeaf(leaf);
+	}
 
 	onunload() {}
 
@@ -254,7 +284,9 @@ export class KnowledgeMapView extends ItemView {
 		this.cy?.nodes().forEach(node => {
 			const parent = node.parent();
 
-			if (parent.length > 0) {
+			// if have parents
+			// and isnt a subcategory itself
+			if (parent.length > 0 && node.data("type") != "category") {
 				// color settings
 				node.data("color", parent.data("color"));
 				node.data("outline_color", parent.data("outline_color"));

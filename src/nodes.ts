@@ -3,24 +3,30 @@ export type NodeType =
 	| "category"
 	| "placeholder";
 
-export interface Node {
+export interface BaseNodeData {
 	id: string;
-	name: string;
-	color: string;
+	color?: string;
+	outline_color?: string;
 	score: number;
 	type: NodeType;
-	parentId?: string;
+	parent?: string | null;
+	size?: string;
 }
-export interface DataNode extends Node {
-	type: "node";
-	categories: string[];
+export interface DataNode extends BaseNodeData {
+	data: BaseNodeData & {
+		type: "node";
+		categories: string[];
+	}
 }
-export interface CategoryNode extends Node{
-	type: "category";
+export interface CategoryNode {
+	data: BaseNodeData & {
+		type: "category";
+	}
 }
-export interface PlaceholderNode extends Node {
-	type: "placeholder";
-	score: 0;
+export interface PlaceholderNode {
+	data: BaseNodeData & {
+		type: "placeholder";
+	}
 }
 export interface CategoryMembership {
 	nodeID: string[];
