@@ -15,14 +15,13 @@ import {
 	SampleSettingTab,
 } from './settings';
 
-import {  } from "./nodes";
+import { Node, BaseNodeData, DataNode, CategoryNode, PlaceholderNode } from "./nodes";
 import { nodes } from "./data";
 // graph 
 import cytoscape from "cytoscape";
 
 
 
-// Remember to rename these classes and interfaces!
 
 export default class Visionary extends Plugin {
 	settings!: MyPluginSettings;
@@ -112,14 +111,14 @@ export default class Visionary extends Plugin {
         });
 
 		// the list of nodes
-		const nodes = [];
+		const nodes: Array<Node> = [];
 
 		// go through each markdown file
-		const result = await this.loadFiles();
+		await this.loadFiles(nodes);
 
 	}
 
-	async loadFiles(): Promise<null> {
+	async loadFiles(nodes: Array<Node>): Promise<null> {
 		const { vault } = this.app;
 		const fileContents = await Promise.all(
 			vault.getMarkdownFiles().map(async (file) => {
@@ -156,7 +155,12 @@ export default class Visionary extends Plugin {
 		if (leaf != undefined) workspace.revealLeaf(leaf);
 	}
 
-	onunload() {}
+	onunload() {
+
+		// to save all data necessary
+		// and free everything else
+
+	}
 
 	async loadSettings() {
 		this.settings = Object.assign(
@@ -189,11 +193,15 @@ export class KnowledgeMapView extends ItemView {
 
 	private cy?: cytoscape.Core;
 	private graphEl: HTMLElement | null = null;
+	private nodes: Array<Node> = [];
 
 	constructor(leaf: WorkspaceLeaf) {
 		super(leaf);
 	}
 	
+	async loadNodes(nodes: Array<Node>) {
+		this.nodes = nodes;
+	}
 	
 	private options = {
 		name: 'preset',
@@ -228,19 +236,21 @@ export class KnowledgeMapView extends ItemView {
 
 		container: el,//: document.getElementById('cy'), // container to render in
 
-		elements: [ // list of graph elements to start with
-			// { // node a
-			// data: { id: 'a'}
-			// },
-			// { // node b
-			// data: { id: 'b', degree: 1 }
-			// },
-			// { // edge ab
-			// data: { id: 'ab', source: 'a', target: 'b', degree: 1 }
-			// },
+		// elements: [ // list of graph elements to start with
+		// 	// { // node a
+		// 	// data: { id: 'a'}
+		// 	// },
+		// 	// { // node b
+		// 	// data: { id: 'b', degree: 1 }
+		// 	// },
+		// 	// { // edge ab
+		// 	// data: { id: 'ab', source: 'a', target: 'b', degree: 1 }
+		// 	// },
+		// 	// ...nodes
+		// 	...this.nodes
+		// ],
 
-			...nodes
-		],
+		elements: this.nodes.map(node => ({ data: node.data })),
 
 		style: [ // the stylesheet for the graph
 			{
