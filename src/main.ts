@@ -7,7 +7,7 @@ import {
 	Plugin,
 	ItemView,
 	WorkspaceLeaf,
-	TFile
+	TFile,
 } from 'obsidian';
 import {
 	DEFAULT_SETTINGS,
@@ -15,20 +15,42 @@ import {
 	SampleSettingTab,
 } from './settings';
 
-import { Node, BaseNodeData, DataNode, CategoryNode, PlaceholderNode } from "./nodes";
-import { nodes } from "./data";
-// graph 
-import cytoscape from "cytoscape";
+import {
+	Node,
+	BaseNodeData,
+	DataNode,
+	CategoryNode,
+	PlaceholderNode,
+} from './nodes';
 
+import { config } from './config';
 
-
+// graph
+import cytoscape, { ElementDefinition } from 'cytoscape';
 
 export default class Visionary extends Plugin {
 	settings!: MyPluginSettings;
+	nodes: Node[] = [];
 
 	async onload() {
 		await this.loadSettings();
 
+		// important variables
+		// the list of nodes
+		this.nodes = [
+			{
+				data: {
+					id: 'programming',
+					color: '#5EF527',
+					outline_color: '#54c52b',
+					score: 25,
+					type: 'node',
+					parent: null,
+				},
+				type: 'node',
+				categories: [],
+			},
+		];
 		// This creates an icon in the left ribbon.
 		this.addRibbonIcon('dice', 'Sample', (_evt: MouseEvent) => {
 			// Called when the user clicks the icon.
@@ -95,47 +117,58 @@ export default class Visionary extends Plugin {
 		);
 
 		// HEREEE
-
-		 this.registerView(
-            VIEW_TYPE_KNOWLEDGE_MAP,
-            (leaf) => new KnowledgeMapView(leaf)
-        );
-
-        this.addCommand({
-            id: "open-knowledge-map",
-            name: "Open knowledge map",
-            callback: () => {
-                // Open your view
-				this.activateView();
-            }
-        });
-
-		// the list of nodes
-		const nodes: Array<Node> = [];
-
 		// go through each markdown file
-		await this.loadFiles(nodes);
+		await this.loadFiles();
 
+		this.registerView(
+			VIEW_TYPE_KNOWLEDGE_MAP,
+			(leaf) => new KnowledgeMapView(leaf, this),
+		);
+
+		this.addCommand({
+			id: 'open-knowledge-map',
+			name: 'Open knowledge map',
+			callback: () => {
+				// Open your view
+				this.activateView();
+			},
+		});
 	}
 
-	async loadFiles(nodes: Array<Node>): Promise<null> {
+	async loadFiles(): Promise<null> {
 		const { vault } = this.app;
 		const fileContents = await Promise.all(
 			vault.getMarkdownFiles().map(async (file) => {
 				return {
-					"path": file.path,
-					"character count": (await vault.cachedRead(file)).length,
-					"parent": file.parent?.path,
-					"name": file.basename
-				}
-			})
+					path: file.path,
+					'character count': (await vault.cachedRead(file)).length,
+					parent: file.parent?.path,
+					name: file.basename,
+				};
+			}),
 		);
+		this.nodes = fileContents.map((fileObj) => {
+				return {
+					data: {
+						id: fileObj.name,
+						color: '#5EF527',
+						outline_color: '#54c52b',
+						score: fileObj['character count'],
+						size: config.default_node_size,
+						type: 'node',
+						parent: null,
+					},
+					type: 'node',
+					categories: [],
+				};
+			});
+		console.log('nodes');
 
 		fileContents.forEach((content) => {
-			console.log("Path:", content.path);
-			console.log("Character count:", content["character count"]);
-			console.log("Parent:", content.parent);
-			console.log("Name:", content.name);
+			console.log('Path:', content.path);
+			console.log('Character count:', content['character count']);
+			console.log('Parent:', content.parent);
+			console.log('Name:', content.name);
 		});
 		return null;
 	}
@@ -143,23 +176,24 @@ export default class Visionary extends Plugin {
 	async activateView() {
 		const { workspace } = this.app;
 		const leaves = workspace.getLeavesOfType(VIEW_TYPE_KNOWLEDGE_MAP);
-		let leaf: WorkspaceLeaf | null | undefined = null; 
+		let leaf: WorkspaceLeaf | null | undefined = null;
 		if (leaves.length > 0) {
 			leaf = leaves[0];
 		} else {
 			leaf = workspace.getRightLeaf(false);
 			if (!leaf) return;
-			await leaf?.setViewState({type: VIEW_TYPE_KNOWLEDGE_MAP, active: true});
+			await leaf?.setViewState({
+				type: VIEW_TYPE_KNOWLEDGE_MAP,
+				active: true,
+			});
 		}
 
 		if (leaf != undefined) workspace.revealLeaf(leaf);
 	}
 
 	onunload() {
-
 		// to save all data necessary
 		// and free everything else
-
 	}
 
 	async loadSettings() {
@@ -187,125 +221,136 @@ class SampleModal extends Modal {
 	}
 }
 
-export const VIEW_TYPE_KNOWLEDGE_MAP = "knowledge-map";
+export const VIEW_TYPE_KNOWLEDGE_MAP = 'knowledge-map';
 
 export class KnowledgeMapView extends ItemView {
-
 	private cy?: cytoscape.Core;
 	private graphEl: HTMLElement | null = null;
-	private nodes: Array<Node> = [];
+	private plugin: Visionary;
 
-	constructor(leaf: WorkspaceLeaf) {
+	constructor(leaf: WorkspaceLeaf, plugin: Visionary) {
 		super(leaf);
+		this.plugin = plugin;
 	}
-	
-	async loadNodes(nodes: Array<Node>) {
-		this.nodes = nodes;
+
+	private nodes_to_ele(): ElementDefinition[] {
+		return this.plugin.nodes.map((node) => ({
+			group: 'nodes',
+			data: node.data,
+		})) as ElementDefinition[];
 	}
-	
+
 	private options = {
 		name: 'preset',
-		// fit: true,
+		fit: true,
+	};
+
+	getViewType() {
+		return VIEW_TYPE_KNOWLEDGE_MAP;
 	}
 
-    getViewType() {
-        return VIEW_TYPE_KNOWLEDGE_MAP;
-    }
+	getDisplayText() {
+		return 'Knowledge Map';
+	}
 
-    getDisplayText() {
-        return "Knowledge Map";
-    }
-
-    async onOpen() {
-
+	async onOpen() {
 		const container = this.contentEl;
 		container.empty();
-		container.createEl('h4', { text: 'Example view' });
-        this.graphEl = container.createDiv({
-            cls: "knowledge-map-container"
-        });
+		container.createEl('h4', { text: 'Graph View' });
+		const refresh_button = container.createEl('button', {
+			text: 'Refresh',
+		});
+		refresh_button.addEventListener('click', async () => {
+			await this.refresh_graph();
+		})
+		this.graphEl = container.createDiv({
+			cls: 'knowledge-map-container',
+		});
 
-        const el = this.graphEl;
+		const el = this.graphEl;
+		if (el == null) return;
+
 		el.setCssProps({
-			width: "100%",
-			height: "500px",
+			width: '100%',
+			height: '500px',
 			// "background-color": "blue",
 		});
 
+		let nodes_ele = this.nodes_to_ele();
+		console.log(nodes_ele);
+
 		this.cy = cytoscape({
+			container: el, //: document.getElementById('cy'), // container to render in
 
-		container: el,//: document.getElementById('cy'), // container to render in
+			// elements: this.nodes.map(node => ({ data: node.data })),
+			elements: nodes_ele,
 
-		// elements: [ // list of graph elements to start with
-		// 	// { // node a
-		// 	// data: { id: 'a'}
-		// 	// },
-		// 	// { // node b
-		// 	// data: { id: 'b', degree: 1 }
-		// 	// },
-		// 	// { // edge ab
-		// 	// data: { id: 'ab', source: 'a', target: 'b', degree: 1 }
-		// 	// },
-		// 	// ...nodes
-		// 	...this.nodes
-		// ],
+			style: [
+				// the stylesheet for the graph
+				{
+					selector: 'node',
+					style: {
+						'background-color': 'data(color)',
+						label: 'data(id)',
+						color: 'data(outline_color)', //'#ffffff',
+						'outline-color': 'data(outline_color)',
+						'outline-width': 1,
+						'outline-style': 'solid',
+						width: 'data(size)',
+						height: 'data(size)',
+					},
+				},
+				{
+					selector: 'node:parent',
+					style: {
+						'outline-width': 0,
+						'border-width': 0,
+					},
+				},
+				{
+					selector: 'edge',
+					style: {
+						width: 3,
+						'line-color': '#ebff38',
+						'target-arrow-color': '#fa0202',
+						'target-arrow-shape': 'triangle',
+						'curve-style': 'bezier',
+					},
+				},
+			],
 
-		elements: this.nodes.map(node => ({ data: node.data })),
-
-		style: [ // the stylesheet for the graph
-			{
-			selector: 'node',
-			style: {
-				'background-color': 'data(color)',
-				'label': 'data(id)',
-				'color': 'data(outline_color)', //'#ffffff',
-				'outline-color': "data(outline_color)",
-				"outline-width": 1,
-				"outline-style": "solid",
-				"width": 'data(size)',
-				"height": 'data(size)',
-			}
-			},
-			{
-				selector: 'node:parent',
-				style: {
-					'outline-width': 0,
-					'border-width': 0
-				}
-			},
-			{
-			selector: 'edge',
-			style: {
-				'width': 3,
-				'line-color': '#ebff38',
-				'target-arrow-color': '#fa0202',
-				'target-arrow-shape': 'triangle',
-				'curve-style': 'bezier'
-			}
-			}
-		],
-
-		layout:  this.options,
-
+			layout: this.options,
 		});
+		await this.refresh_graph();
+	}
 
+	async refresh_graph() {
+		console.log("refreshing");
+		await this.plugin.loadFiles();
+		this.cy?.elements().remove();
+		this.cy?.add(this.nodes_to_ele());
+		this.cy?.layout(this.options).run();
+		
+		console.log('hi');
 		// grab all the nodes
 		// and time to build the rest of the stuff!
-		this.cy?.nodes().forEach(node => {
+		this.cy?.nodes().forEach((node) => {
 			const parent = node.parent();
 
 			// if have parents
 			// and isnt a subcategory itself
-			if (parent.length > 0 && node.data("type") != "category") {
+			if (parent.length > 0 && node.data('type') != 'category') {
 				// color settings
-				node.data("color", parent.data("color"));
-				node.data("outline_color", parent.data("outline_color"));
+				node.data('color', parent.data('color'));
+				node.data('outline_color', parent.data('outline_color'));
 			}
+
+			//convert score to size
+			if (node.data('score') != 0) node.data('size', node.data('score'));
 		});
-    }
+	}
 
-    async onClose() {
-        this.cy?.destroy();
-    }
+	async onClose() {
+		this.cy?.destroy();
+	}
 }
-

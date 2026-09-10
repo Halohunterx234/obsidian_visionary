@@ -11,7 +11,7 @@ export interface BaseNodeData {
 		score: number;
 		type: NodeType;
 		parent?: string | null;
-		size?: string;
+		size?: number;
 	}
 }
 export interface DataNode extends BaseNodeData {
