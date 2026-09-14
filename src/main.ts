@@ -8,12 +8,13 @@ import {
 	ItemView,
 	WorkspaceLeaf,
 	TFile,
+	TAbstractFile,
 } from 'obsidian';
 import {
 	DEFAULT_SETTINGS,
 	MyPluginSettings,
 	SampleSettingTab,
-} from './settings';
+} from './settings.ts';
 
 import {
 	Node,
@@ -21,13 +22,24 @@ import {
 	DataNode,
 	CategoryNode,
 	PlaceholderNode,
-} from './nodes';
+} from './nodes.ts';
 
-import { config } from './config';
+
+import { config } from './config.ts';
+
+import KnowledgeMapView from './mapview.ts';
 
 // graph
 import cytoscape, { ElementDefinition } from 'cytoscape';
 
+export const VIEW_TYPE_KNOWLEDGE_MAP = 'knowledge-map';
+
+interface FileContents {
+	path: string,
+	'character count': number,
+	parent: string | undefined,
+	name: string;
+}
 export default class Visionary extends Plugin {
 	settings!: MyPluginSettings;
 	nodes: Node[] = [];
@@ -35,22 +47,7 @@ export default class Visionary extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
-		// important variables
-		// the list of nodes
-		this.nodes = [
-			{
-				data: {
-					id: 'programming',
-					color: '#5EF527',
-					outline_color: '#54c52b',
-					score: 25,
-					type: 'node',
-					parent: null,
-				},
-				type: 'node',
-				categories: [],
-			},
-		];
+		
 		// This creates an icon in the left ribbon.
 		this.addRibbonIcon('dice', 'Sample', (_evt: MouseEvent) => {
 			// Called when the user clicks the icon.
@@ -117,9 +114,11 @@ export default class Visionary extends Plugin {
 		);
 
 		// HEREEE
-		// go through each markdown file
+		// inital load of the notes
+		// TO DO: load from data.json instead
 		await this.loadFiles();
 
+		// graph view
 		this.registerView(
 			VIEW_TYPE_KNOWLEDGE_MAP,
 			(leaf) => new KnowledgeMapView(leaf, this),
@@ -133,8 +132,52 @@ export default class Visionary extends Plugin {
 				this.activateView();
 			},
 		});
+
+		// Dealing with events
+		// find the exact node corresponding to the file
+		// note: this is called when the vault first loads each file
+		this.registerEvent(this.app.vault.on('create', async (event: TAbstractFile) => {
+			console.log("new file has been created")
+			console.log(event)
+			// add to nodes
+			const newNode: DataNode = {
+				type: "node",
+				categories: [],
+				data: {
+					id: event.name,
+					score: 0,
+				}
+			}
+			await this.addNode(newNode);
+		}))
+		
+		this.registerEvent(this.app.vault.on('modify', async (event) => {
+			console.log("file has been modified")
+			console.log(event)
+			console.log("what", this.nodes);
+			let file_details = await this.loadFileContents(event.name);
+			if (file_details === null) return;
+			console.log(file_details);
+			await this.updateNodeDetails(file_details);
+			// refresh
+			console.log("??");
+			// find a way to refresh the knowledge map view
+
+		}))
+
+		this.registerEvent(this.app.vault.on('delete', (event) => {
+			console.log("file has been deleted")
+			console.log(event)
+		}))
+
+		this.registerEvent(this.app.vault.on('rename', (event) => {
+			console.log("file has been renamed");
+			console.log(event);
+		}))
 	}
 
+	// loads a huge amt of data
+	// to-do, load from cached data.json instead unless via special command for first time
 	async loadFiles(): Promise<null> {
 		const { vault } = this.app;
 		const fileContents = await Promise.all(
@@ -162,17 +205,93 @@ export default class Visionary extends Plugin {
 					categories: [],
 				};
 			});
-		console.log('nodes');
+		console.log('nodes loaded');
 
-		fileContents.forEach((content) => {
-			console.log('Path:', content.path);
-			console.log('Character count:', content['character count']);
-			console.log('Parent:', content.parent);
-			console.log('Name:', content.name);
-		});
+		// fileContents.forEach((content) => {
+		// 	console.log('Path:', content.path);
+		// 	console.log('Character count:', content['character count']);
+		// 	console.log('Parent:', content.parent);
+		// 	console.log('Name:', content.name);
+		// });
 		return null;
 	}
 
+	// load singular file's details
+	async loadFileContents(file_name: string): Promise<FileContents | null>{
+		const file = this.app.vault.getMarkdownFiles().find(
+			(value) => value.name === file_name
+		);
+		let values = null;
+		if (file != null) {
+			values = {
+				path: file.path,
+				'character count': (await this.app.vault.cachedRead(file)).length,
+				parent: file.parent?.path,
+				name: file.basename,
+			}
+		}
+		return values ?? null;
+	}
+
+	// middle level methods
+	// intention to bridge the layer between node data type and higher level types
+
+	// with the exact file, we can craft a updated node and replace the existing one
+	async updateNodeDetails(details: FileContents): Promise<null> {
+		/// find the current node
+		console.log("before: ", this.nodes)
+		let data_node: Node | undefined = await this.getNode(details.name);
+		if (data_node === undefined) return null;
+		let updated_node: Node = {
+			type: data_node.type,
+			categories: data_node.categories,
+			data: {
+				id: data_node.data.id,
+				score: details['character count'],// update this
+			}	
+		}
+		await this.editNode(updated_node);
+		console.log("after: ", this.nodes)
+		return null;
+	}
+
+
+	// node level methods
+	// obsidian doesnt allow notes of same names
+	private async addNode(node: Node): Promise<null> {
+		// check if already existing node of the same name
+		this.nodes.push(node);
+		return null;
+	}
+	private async removeNode(node: Node): Promise<null> {
+		// check if already existing node of the same name
+
+		// to do
+		// maybe add a throwback if the node isnt present?
+		return null;
+	}
+	private async editNode(node: Node): Promise<null> {
+		const id = node.data.id;
+		let idx = undefined;
+		this.nodes.find((val, node_idx) => {
+			if (val.data.id == id) {
+				idx = node_idx;
+			}
+		})
+		// if found, edit
+		if (idx != undefined) this.nodes.splice(idx, 1, node)
+		return null;
+	}
+	private async getNode(name: string): Promise<undefined | Node> {
+		return this.nodes.find((val) => (val.data.id === name))
+	}
+
+	// newNode(obj): Node {
+		// to do, constructor that fills all non-defined
+		// arguments with default values
+	// }
+
+	// turn on the view - obsidian docs
 	async activateView() {
 		const { workspace } = this.app;
 		const leaves = workspace.getLeavesOfType(VIEW_TYPE_KNOWLEDGE_MAP);
@@ -191,6 +310,7 @@ export default class Visionary extends Plugin {
 		if (leaf != undefined) workspace.revealLeaf(leaf);
 	}
 
+	// vv important, remb to do
 	onunload() {
 		// to save all data necessary
 		// and free everything else
@@ -221,136 +341,6 @@ class SampleModal extends Modal {
 	}
 }
 
-export const VIEW_TYPE_KNOWLEDGE_MAP = 'knowledge-map';
 
-export class KnowledgeMapView extends ItemView {
-	private cy?: cytoscape.Core;
-	private graphEl: HTMLElement | null = null;
-	private plugin: Visionary;
 
-	constructor(leaf: WorkspaceLeaf, plugin: Visionary) {
-		super(leaf);
-		this.plugin = plugin;
-	}
 
-	private nodes_to_ele(): ElementDefinition[] {
-		return this.plugin.nodes.map((node) => ({
-			group: 'nodes',
-			data: node.data,
-		})) as ElementDefinition[];
-	}
-
-	private options = {
-		name: 'preset',
-		fit: true,
-	};
-
-	getViewType() {
-		return VIEW_TYPE_KNOWLEDGE_MAP;
-	}
-
-	getDisplayText() {
-		return 'Knowledge Map';
-	}
-
-	async onOpen() {
-		const container = this.contentEl;
-		container.empty();
-		container.createEl('h4', { text: 'Graph View' });
-		const refresh_button = container.createEl('button', {
-			text: 'Refresh',
-		});
-		refresh_button.addEventListener('click', async () => {
-			await this.refresh_graph();
-		})
-		this.graphEl = container.createDiv({
-			cls: 'knowledge-map-container',
-		});
-
-		const el = this.graphEl;
-		if (el == null) return;
-
-		el.setCssProps({
-			width: '100%',
-			height: '500px',
-			// "background-color": "blue",
-		});
-
-		let nodes_ele = this.nodes_to_ele();
-		console.log(nodes_ele);
-
-		this.cy = cytoscape({
-			container: el, //: document.getElementById('cy'), // container to render in
-
-			// elements: this.nodes.map(node => ({ data: node.data })),
-			elements: nodes_ele,
-
-			style: [
-				// the stylesheet for the graph
-				{
-					selector: 'node',
-					style: {
-						'background-color': 'data(color)',
-						label: 'data(id)',
-						color: 'data(outline_color)', //'#ffffff',
-						'outline-color': 'data(outline_color)',
-						'outline-width': 1,
-						'outline-style': 'solid',
-						width: 'data(size)',
-						height: 'data(size)',
-					},
-				},
-				{
-					selector: 'node:parent',
-					style: {
-						'outline-width': 0,
-						'border-width': 0,
-					},
-				},
-				{
-					selector: 'edge',
-					style: {
-						width: 3,
-						'line-color': '#ebff38',
-						'target-arrow-color': '#fa0202',
-						'target-arrow-shape': 'triangle',
-						'curve-style': 'bezier',
-					},
-				},
-			],
-
-			layout: this.options,
-		});
-		await this.refresh_graph();
-	}
-
-	async refresh_graph() {
-		console.log("refreshing");
-		await this.plugin.loadFiles();
-		this.cy?.elements().remove();
-		this.cy?.add(this.nodes_to_ele());
-		this.cy?.layout(this.options).run();
-		
-		console.log('hi');
-		// grab all the nodes
-		// and time to build the rest of the stuff!
-		this.cy?.nodes().forEach((node) => {
-			const parent = node.parent();
-
-			// if have parents
-			// and isnt a subcategory itself
-			if (parent.length > 0 && node.data('type') != 'category') {
-				// color settings
-				node.data('color', parent.data('color'));
-				node.data('outline_color', parent.data('outline_color'));
-			}
-
-			//convert score to size
-			if (node.data('score') != 0) node.data('size', node.data('score'));
-		});
-	}
-
-	async onClose() {
-		this.cy?.destroy();
-	}
-}

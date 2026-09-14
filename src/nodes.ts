@@ -9,7 +9,6 @@ export interface BaseNodeData {
 		color?: string;
 		outline_color?: string;
 		score: number;
-		type: NodeType;
 		parent?: string | null;
 		size?: number;
 	}
