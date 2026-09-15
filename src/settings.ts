@@ -1,15 +1,15 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
 import Visionary from './main.ts';
 
-export interface MyPluginSettings {
+export interface PluginSettings {
 	mySetting: string;
 }
 
-export const DEFAULT_SETTINGS: MyPluginSettings = {
+export const DEFAULT_SETTINGS: PluginSettings = {
 	mySetting: 'default',
 };
 
-export class SampleSettingTab extends PluginSettingTab {
+export class SettingTab extends PluginSettingTab {
 	plugin: Visionary;
 
 	constructor(app: App, plugin: Visionary) {

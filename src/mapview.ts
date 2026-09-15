@@ -10,8 +10,8 @@ import Visionary, {
 
 import {
 	DEFAULT_SETTINGS,
-	MyPluginSettings,
-	SampleSettingTab,
+	PluginSettings,
+	SettingTab,
 } from './settings.ts';
 
 import {
@@ -80,7 +80,6 @@ export default class KnowledgeMapView extends ItemView {
 		});
 
 		let nodes_ele = this.nodes_to_ele();
-		console.log(nodes_ele);
 
 		this.cy = cytoscape({
 			container: el, //: document.getElementById('cy'), // container to render in
@@ -128,13 +127,11 @@ export default class KnowledgeMapView extends ItemView {
 	}
 
 	async refresh_graph() {
-		console.log("refreshing");
 		await this.plugin.loadFiles();
 		this.cy?.elements().remove();
 		this.cy?.add(this.nodes_to_ele());
 		this.cy?.layout(this.options).run();
 		
-		console.log('hi');
 		// grab all the nodes
 		// and time to build the rest of the stuff!
 		this.cy?.nodes().forEach((node) => {

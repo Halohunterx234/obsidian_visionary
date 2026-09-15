@@ -12,8 +12,8 @@ import {
 } from 'obsidian';
 import {
 	DEFAULT_SETTINGS,
-	MyPluginSettings,
-	SampleSettingTab,
+	PluginSettings,
+	SettingTab,
 } from './settings.ts';
 
 import {
@@ -42,7 +42,7 @@ interface FileContents {
 	name: string;
 }
 export default class Visionary extends Plugin {
-	settings!: MyPluginSettings;
+	settings!: PluginSettings;
 	nodes: Node[] = [];
 	map_view: KnowledgeMapView | undefined = undefined;
 
@@ -65,7 +65,7 @@ export default class Visionary extends Plugin {
 			id: 'open-modal-simple',
 			name: 'Open modal (simple)',
 			callback: () => {
-				new SampleModal(this.app).open();
+				new Modal(this.app).open();
 			},
 		});
 		// This adds an editor command that can perform some operation on the current editor instance
@@ -91,7 +91,7 @@ export default class Visionary extends Plugin {
 					// If checking is true, we're simply "checking" if the command can be run.
 					// If checking is false, then we want to actually perform the operation.
 					if (!checking) {
-						new SampleModal(this.app).open();
+						new Modal(this.app).open();
 					}
 
 					// This command will only show up in Command Palette when the check function returns true
@@ -102,7 +102,7 @@ export default class Visionary extends Plugin {
 		});
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
+		this.addSettingTab(new SettingTab(this.app, this));
 
 		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
 		// Using this function will automatically remove the event listener when this plugin is disabled.
@@ -111,9 +111,9 @@ export default class Visionary extends Plugin {
 		});
 
 		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(
-			window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000),
-		);
+		// this.registerInterval(
+		// 	window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000),
+		// );
 
 		// HEREEE
 		// inital load of the notes
@@ -143,8 +143,6 @@ export default class Visionary extends Plugin {
 		// find the exact node corresponding to the file
 		// note: this is called when the vault first loads each file
 		this.registerEvent(this.app.vault.on('create', async (event: TAbstractFile) => {
-			console.log("new file has been created")
-			console.log(event)
 			// add to nodes
 			const newNode: DataNode = {
 				type: "node",
@@ -159,8 +157,6 @@ export default class Visionary extends Plugin {
 		}))
 		
 		this.registerEvent(this.app.vault.on('modify', async (event) => {
-			console.log("file has been modified")
-			console.log(event)
 			let file_details = await this.loadFileContents(event.name);
 			if (file_details === null) return;
 			console.log(file_details);
@@ -170,8 +166,6 @@ export default class Visionary extends Plugin {
 		}))
 
 		this.registerEvent(this.app.vault.on('delete', async (event) => {
-			console.log("file has been deleted")
-			console.log(event)
 			// if a note is deleted, delete all clones
 			const name = event.name.split('.')[0];
 			if (name != undefined) {
@@ -181,8 +175,6 @@ export default class Visionary extends Plugin {
 		}))
 
 		this.registerEvent(this.app.vault.on('rename', async (event, oldPath) => {
-			console.log("file has been renamed");
-			console.log(event);
 			const name = event.name.split('.')[0];
 			if (name != undefined) {
 				// const node = this.createNode(name, )
@@ -404,7 +396,7 @@ export default class Visionary extends Plugin {
 		this.settings = Object.assign(
 			{},
 			DEFAULT_SETTINGS,
-			(await this.loadData()) as Partial<MyPluginSettings>,
+			(await this.loadData()) as Partial<PluginSettings>,
 		);
 	}
 
@@ -413,7 +405,7 @@ export default class Visionary extends Plugin {
 	}
 }
 
-class SampleModal extends Modal {
+class Modal extends Modal {
 	onOpen() {
 		const { contentEl } = this;
 		contentEl.setText('Woah!');
