@@ -197,7 +197,7 @@ export default class Visionary extends Plugin {
 
 		// easiest way to add categories
 		// markdown code processor
-		this.registerMarkdownCodeBlockProcessor("categories", (source, el) => {
+		this.registerMarkdownCodeBlockProcessor("categories", (source, el, ctx) => {
 			const categories = source
 				.split("\n")
 				.map(x => x.trim())
@@ -207,10 +207,11 @@ export default class Visionary extends Plugin {
 					text: category,
 				});
 				button.addEventListener("click", async () => {
-					const file = this.app.vault.getAbstractFileByPath();
+					const file = this.app.vault.getAbstractFileByPath(ctx.sourcePath);
 
 					if (!(file instanceof TFile)) return;
-					await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+					await this.app.fileManager.processFrontMatter(
+						file, (frontmatter) => {
 					let categories = frontmatter.categories ?? [];
 
 					if (!Array.isArray(categories)) {
