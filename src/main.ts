@@ -22,6 +22,7 @@ import {
 	DataNode,
 	CategoryNode,
 	PlaceholderNode,
+	NodeType,
 } from './nodes.ts';
 
 
@@ -43,6 +44,7 @@ interface FileContents {
 export default class Visionary extends Plugin {
 	settings!: MyPluginSettings;
 	nodes: Node[] = [];
+	map_view: KnowledgeMapView | undefined = undefined;
 
 	async onload() {
 		await this.loadSettings();
@@ -121,7 +123,11 @@ export default class Visionary extends Plugin {
 		// graph view
 		this.registerView(
 			VIEW_TYPE_KNOWLEDGE_MAP,
-			(leaf) => new KnowledgeMapView(leaf, this),
+			(leaf) => {
+				this.map_view = new KnowledgeMapView(leaf, this);
+				return this.map_view
+			}
+			// (leaf) => new KnowledgeMapView(leaf, this),
 		);
 
 		this.addCommand({
@@ -148,32 +154,81 @@ export default class Visionary extends Plugin {
 					score: 0,
 				}
 			}
-			await this.addNode(newNode);
+			await this._addNode(newNode);
+			this.map_view?.refresh_graph();
 		}))
 		
 		this.registerEvent(this.app.vault.on('modify', async (event) => {
 			console.log("file has been modified")
 			console.log(event)
-			console.log("what", this.nodes);
 			let file_details = await this.loadFileContents(event.name);
 			if (file_details === null) return;
 			console.log(file_details);
 			await this.updateNodeDetails(file_details);
 			// refresh
-			console.log("??");
-			// find a way to refresh the knowledge map view
-
+			this.map_view?.refresh_graph();
 		}))
 
-		this.registerEvent(this.app.vault.on('delete', (event) => {
+		this.registerEvent(this.app.vault.on('delete', async (event) => {
 			console.log("file has been deleted")
 			console.log(event)
+			// if a note is deleted, delete all clones
+			const name = event.name.split('.')[0];
+			if (name != undefined) {
+				await this._removeNode(name, null);
+				this.map_view?.refresh_graph();
+			}
 		}))
 
-		this.registerEvent(this.app.vault.on('rename', (event) => {
+		this.registerEvent(this.app.vault.on('rename', async (event, oldPath) => {
 			console.log("file has been renamed");
 			console.log(event);
+			const name = event.name.split('.')[0];
+			if (name != undefined) {
+				// const node = this.createNode(name, )
+				const oldFileName = oldPath.substring(oldPath.lastIndexOf("/")+1).split(".")[0];
+				if (oldFileName != undefined) {
+					let node = this.getNode(oldFileName);
+					// to do
+					// settle after implementing categories
+				}
+			}
 		}))
+
+		// easiest way to add categories
+		// markdown code processor
+		this.registerMarkdownCodeBlockProcessor("categories", (source, el) => {
+			const categories = source
+				.split("\n")
+				.map(x => x.trim())
+				.filter(Boolean);
+			for (const category of categories) {
+				const button = el.createEl("button", {
+					text: category,
+				});
+				button.addEventListener("click", async () => {
+					const file = this.app.vault.getAbstractFileByPath();
+
+					if (!(file instanceof TFile)) return;
+					await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+					let categories = frontmatter.categories ?? [];
+
+					if (!Array.isArray(categories)) {
+						categories = [categories];
+					}
+
+					if (categories.includes(category)) {
+						categories = categories.filter((x: string) => x !== category);
+					} else {
+						categories.push(category);
+					}
+
+					frontmatter.categories = categories;
+				});
+				})
+			}
+			
+		})
 	}
 
 	// loads a huge amt of data
@@ -191,19 +246,11 @@ export default class Visionary extends Plugin {
 			}),
 		);
 		this.nodes = fileContents.map((fileObj) => {
-				return {
-					data: {
-						id: fileObj.name,
-						color: '#5EF527',
-						outline_color: '#54c52b',
-						score: fileObj['character count'],
-						size: config.default_node_size,
-						type: 'node',
-						parent: null,
-					},
-					type: 'node',
-					categories: [],
-				};
+				return this.createNode(
+					fileObj.name, undefined, undefined,
+					fileObj['character count'], undefined,
+					undefined, 'node', []
+				);
 			});
 		console.log('nodes loaded');
 
@@ -250,7 +297,7 @@ export default class Visionary extends Plugin {
 				score: details['character count'],// update this
 			}	
 		}
-		await this.editNode(updated_node);
+		await this._editNode(updated_node);
 		console.log("after: ", this.nodes)
 		return null;
 	}
@@ -258,19 +305,33 @@ export default class Visionary extends Plugin {
 
 	// node level methods
 	// obsidian doesnt allow notes of same names
-	private async addNode(node: Node): Promise<null> {
+	private async _addNode(node: Node): Promise<null> {
 		// check if already existing node of the same name
 		this.nodes.push(node);
 		return null;
 	}
-	private async removeNode(node: Node): Promise<null> {
-		// check if already existing node of the same name
-
+	// remove either all references of a node or a specific node
+	private async _removeNode(name: string, category: null | string): Promise<null> {
+		// if no declared categories then delete all
+		let nodes: Node[] = [];
+		if (category === null) {
+			nodes = this.nodes.filter((value) => 
+				value.data.id != name
+			);
+		} else {
+			nodes = this.nodes.filter((value) => 
+				!value.categories.contains(category) && 
+			value.data.id != name )
+		}
+		this.nodes = nodes;
 		// to do
 		// maybe add a throwback if the node isnt present?
 		return null;
 	}
-	private async editNode(node: Node): Promise<null> {
+	// to do
+	// update after implementing categroies
+	// there may be duplicate nodes with same id
+	private async _editNode(node: Node): Promise<null> {
 		const id = node.data.id;
 		let idx = undefined;
 		this.nodes.find((val, node_idx) => {
@@ -285,6 +346,28 @@ export default class Visionary extends Plugin {
 	private async getNode(name: string): Promise<undefined | Node> {
 		return this.nodes.find((val) => (val.data.id === name))
 	}
+
+	// constructor, for creating or transferring node data
+	private createNode(id: string,
+		color: string|undefined=config.default_node_color, 
+		outline_color: string|undefined=config.default_node_outline_color,
+		score: number=0, parent: string|undefined=undefined,
+		size: number|undefined=config.default_node_size, type: NodeType, categories: string[]): Node {
+			return {
+				type: type,
+				categories: categories,
+				data: {
+					id: id,
+					color: color,
+					outline_color: outline_color,
+					score: score,
+					parent: parent,
+					size: size, 
+				}
+			}
+		}
+	
+	
 
 	// newNode(obj): Node {
 		// to do, constructor that fills all non-defined

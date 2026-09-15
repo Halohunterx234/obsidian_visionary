@@ -4,6 +4,7 @@ export type NodeType =
 	| "placeholder";
 
 export interface BaseNodeData {
+	type: NodeType,
 	data: {
 		id: string;
 		color?: string;
@@ -11,25 +12,21 @@ export interface BaseNodeData {
 		score: number;
 		parent?: string | null;
 		size?: number;
-	}
+	},
+	categories: string[];
 }
 export interface DataNode extends BaseNodeData {
 	type: "node";
-	categories: string[];
 }
-export interface CategoryNode {
-	data: BaseNodeData & {
-		type: "category";
-	}
+export interface CategoryNode extends BaseNodeData {
+	type: "category";
 }
-export interface PlaceholderNode {
-	data: BaseNodeData & {
-		type: "placeholder";
-	}
+export interface PlaceholderNode extends BaseNodeData {
+	type: "placeholder";
 }
 export interface CategoryMembership {
 	nodeID: string[];
 	categoryID: string[]
 }
 
-export type Node = DataNode; //| CategoryNode | PlaceholderNode;
+export type Node = BaseNodeData; //| CategoryNode | PlaceholderNode;

@@ -1,5 +1,5 @@
-import "./nodes"
-import { BaseNodeData } from "./nodes"
+import "./nodes.ts"
+import { BaseNodeData } from "./nodes.ts"
 
 export const config = {
 	"default_node_size": 25,

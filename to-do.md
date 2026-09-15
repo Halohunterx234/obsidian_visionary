@@ -4,9 +4,10 @@
 
 ### Back-end
 
-- On load, initalize nodes data from current files
-- When a note is created, add it to the nodes data
-- Listener and events for when a note is tagged to categories
+x On load, initalize nodes data from current files 
+x When a note is created, add it to the nodes data 
+- Implement categories
+- Update the node methods for duplicated nodes
 - Saving the nodes data in data.json
 
 ### Graph View
