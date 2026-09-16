@@ -17,7 +17,7 @@ import {
 } from './settings.ts';
 
 import {
-	Node,
+	BaseNode,
 	BaseNodeData,
 	DataNode,
 	CategoryNode,
@@ -43,7 +43,8 @@ interface FileContents {
 }
 export default class Visionary extends Plugin {
 	settings!: PluginSettings;
-	nodes: Node[] = [];
+	nodes: BaseNode[] = [];
+	categories: Map<string, number> = new Map();
 	map_view: KnowledgeMapView | undefined = undefined;
 
 	async onload() {
@@ -200,8 +201,14 @@ export default class Visionary extends Plugin {
 				});
 				button.addEventListener("click", async () => {
 					const file = this.app.vault.getAbstractFileByPath(ctx.sourcePath);
+					const file_name = file?.name.split('.');
+					
+					if (!(file instanceof TFile) || file_name === undefined ||
+						file_name[0] === undefined) return;
 
-					if (!(file instanceof TFile)) return;
+					let file_basename: string = file_name[0];
+
+					// edit note's frontmatter data
 					await this.app.fileManager.processFrontMatter(
 						file, (frontmatter) => {
 					let categories = frontmatter.categories ?? [];
@@ -209,14 +216,31 @@ export default class Visionary extends Plugin {
 					if (!Array.isArray(categories)) {
 						categories = [categories];
 					}
-
+					
+					// remove if clicked again
 					if (categories.includes(category)) {
 						categories = categories.filter((x: string) => x !== category);
+						// link to plugin's categories 
+						let number = this.categories.get(category);
+						if (number != undefined && number > 0) this.categories.set(category, number-1);
+						this.remove_category(file_basename, category);
 					} else {
+						// add if not added
 						categories.push(category);
+						console.log("categories ", categories);
+						// link to plugin's categories
+						// if its new, add
+						if (!this.categories.get(category)) this.categories.set(category, 1);
+						else {
+							let number = this.categories.get(category);
+							if (number != undefined) this.categories.set(category, number+1);
+						}
+						this.add_category(file_basename, category);
 					}
-
+					
 					frontmatter.categories = categories;
+					
+					
 				});
 				})
 			}
@@ -239,20 +263,12 @@ export default class Visionary extends Plugin {
 			}),
 		);
 		this.nodes = fileContents.map((fileObj) => {
-				return this.createNode(
+				return createNode(
 					fileObj.name, undefined, undefined,
 					fileObj['character count'], undefined,
 					undefined, 'node', []
 				);
 			});
-		console.log('nodes loaded');
-
-		// fileContents.forEach((content) => {
-		// 	console.log('Path:', content.path);
-		// 	console.log('Character count:', content['character count']);
-		// 	console.log('Parent:', content.parent);
-		// 	console.log('Name:', content.name);
-		// });
 		return null;
 	}
 
@@ -279,26 +295,52 @@ export default class Visionary extends Plugin {
 	// with the exact file, we can craft a updated node and replace the existing one
 	async updateNodeDetails(details: FileContents): Promise<null> {
 		/// find the current node
-		console.log("before: ", this.nodes)
-		let data_node: Node | undefined = await this.getNode(details.name);
+		let data_node: BaseNode | undefined = await this.getNode(details.name);
 		if (data_node === undefined) return null;
-		let updated_node: Node = {
+		let updated_node: BaseNode = {
 			type: data_node.type,
 			categories: data_node.categories,
 			data: {
 				id: data_node.data.id,
+				color: data_node.data.color,
+				outline_color: data_node.data.color,
 				score: details['character count'],// update this
+				parent: data_node.data.parent,
+				size: data_node.data.size,
 			}	
 		}
-		await this._editNode(updated_node);
-		console.log("after: ", this.nodes)
+		await this._editNode(data_node.data.id, updated_node);
 		return null;
 	}
 
+	// update a node and its categories
+	private remove_category(name: string, category: string) {
+		this.getNode(name).then((value) => {
+			if (value != undefined) {
+				let node = value;
+				node.categories.remove(category);
+				this._editNode(name, node);
+				this.map_view?.refresh_graph();
+			}
+		})
+	}
+
+	private add_category(name: string, category: string) {
+		this.getNode(name).then((value) => {
+			if (value != undefined) {
+				let node = value;
+				node.categories.push(category);
+				this._editNode(name, node);
+				console.log("updated node with category, ", this.nodes);
+				this.map_view?.refresh_graph();
+			}
+		})
+
+	}
 
 	// node level methods
 	// obsidian doesnt allow notes of same names
-	private async _addNode(node: Node): Promise<null> {
+	private async _addNode(node: BaseNode): Promise<null> {
 		// check if already existing node of the same name
 		this.nodes.push(node);
 		return null;
@@ -306,7 +348,7 @@ export default class Visionary extends Plugin {
 	// remove either all references of a node or a specific node
 	private async _removeNode(name: string, category: null | string): Promise<null> {
 		// if no declared categories then delete all
-		let nodes: Node[] = [];
+		let nodes: BaseNode[] = [];
 		if (category === null) {
 			nodes = this.nodes.filter((value) => 
 				value.data.id != name
@@ -324,11 +366,10 @@ export default class Visionary extends Plugin {
 	// to do
 	// update after implementing categroies
 	// there may be duplicate nodes with same id
-	private async _editNode(node: Node): Promise<null> {
-		const id = node.data.id;
+	private async _editNode(name: string, node: BaseNode): Promise<null> {
 		let idx = undefined;
 		this.nodes.find((val, node_idx) => {
-			if (val.data.id == id) {
+			if (val.data.id == name) {
 				idx = node_idx;
 			}
 		})
@@ -336,36 +377,10 @@ export default class Visionary extends Plugin {
 		if (idx != undefined) this.nodes.splice(idx, 1, node)
 		return null;
 	}
-	private async getNode(name: string): Promise<undefined | Node> {
+	private async getNode(name: string): Promise<undefined | BaseNode> {
 		return this.nodes.find((val) => (val.data.id === name))
 	}
 
-	// constructor, for creating or transferring node data
-	private createNode(id: string,
-		color: string|undefined=config.default_node_color, 
-		outline_color: string|undefined=config.default_node_outline_color,
-		score: number=0, parent: string|undefined=undefined,
-		size: number|undefined=config.default_node_size, type: NodeType, categories: string[]): Node {
-			return {
-				type: type,
-				categories: categories,
-				data: {
-					id: id,
-					color: color,
-					outline_color: outline_color,
-					score: score,
-					parent: parent,
-					size: size, 
-				}
-			}
-		}
-	
-	
-
-	// newNode(obj): Node {
-		// to do, constructor that fills all non-defined
-		// arguments with default values
-	// }
 
 	// turn on the view - obsidian docs
 	async activateView() {
@@ -405,18 +420,24 @@ export default class Visionary extends Plugin {
 	}
 }
 
-class Modal extends Modal {
-	onOpen() {
-		const { contentEl } = this;
-		contentEl.setText('Woah!');
+// constructor, for creating or transferring node data
+export function createNode(id: string,
+	color: string|undefined=config.default_node_color, 
+	outline_color: string|undefined=config.default_node_outline_color,
+	score: number=0, parent: string|undefined=undefined,
+	size: number|undefined=config.default_node_size, type: NodeType, categories: string[]): BaseNode {
+		return {
+			type: type,
+			categories: categories,
+			data: {
+				id: id,
+				color: color,
+				outline_color: outline_color,
+				score: score,
+				parent: parent,
+				size: size, 
+			}
+		}
 	}
-
-	onClose() {
-		const { contentEl } = this;
-		contentEl.empty();
-	}
-}
-
-
 
 

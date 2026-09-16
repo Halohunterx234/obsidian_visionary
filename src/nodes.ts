@@ -29,4 +29,4 @@ export interface CategoryMembership {
 	categoryID: string[]
 }
 
-export type Node = BaseNodeData; //| CategoryNode | PlaceholderNode;
+export type BaseNode = BaseNodeData; //| CategoryNode | PlaceholderNode;

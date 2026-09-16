@@ -5,7 +5,8 @@ import {
 } from 'obsidian'
 
 import Visionary, {
-    VIEW_TYPE_KNOWLEDGE_MAP
+    VIEW_TYPE_KNOWLEDGE_MAP,
+	createNode
  } from './main.ts'
 
 import {
@@ -15,7 +16,7 @@ import {
 } from './settings.ts';
 
 import {
-	Node,
+	BaseNode,
 	BaseNodeData,
 	DataNode,
 	CategoryNode,
@@ -36,8 +37,8 @@ export default class KnowledgeMapView extends ItemView {
 		this.plugin = plugin;
 	}
 
-	private nodes_to_ele(): ElementDefinition[] {
-		return this.plugin.nodes.map((node) => ({
+	private nodes_to_ele(nodes: BaseNode[]): ElementDefinition[] {
+		return nodes.map((node) => ({
 			group: 'nodes',
 			data: node.data,
 		})) as ElementDefinition[];
@@ -79,7 +80,7 @@ export default class KnowledgeMapView extends ItemView {
 			// "background-color": "blue",
 		});
 
-		let nodes_ele = this.nodes_to_ele();
+		let nodes_ele = this.nodes_to_ele(this.plugin.nodes);
 
 		this.cy = cytoscape({
 			container: el, //: document.getElementById('cy'), // container to render in
@@ -127,16 +128,54 @@ export default class KnowledgeMapView extends ItemView {
 	}
 
 	async refresh_graph() {
-		await this.plugin.loadFiles();
 		this.cy?.elements().remove();
-		this.cy?.add(this.nodes_to_ele());
 		this.cy?.layout(this.options).run();
 		
+		// load the categories
+		// if empty, later will discard
+		let categories: BaseNode[] = []
+		this.plugin.categories.forEach((num, cat) => {
+			if (num == 0) {
+				return
+			}
+			let category_node = createNode(
+				cat,
+				config.default_category_color,
+				config.default_category_outline_color,
+				undefined,
+				undefined,
+				undefined,
+				"category",
+				[]
+			);
+			categories.push(category_node);
+		});
+		console.log("categories", this.nodes_to_ele(categories));
+		// console.log("plugin nodes", this.plugin.nodes);
+		if (categories.length > 0) this.cy?.add(this.nodes_to_ele(categories));
+
 		// grab all the nodes
-		// and time to build the rest of the stuff!
+		// and time to build the rest of the stuff
+		let nodes: BaseNode[] = [];
+		this.plugin.nodes.forEach(node => {
+			// if have categories
+			// split it for each
+			if (node.categories.length > 0) {
+				node.categories.forEach((category) => {
+					let category_node = createNode(node.data.id, undefined, undefined,
+						node.data.score, category, node.data.size, "node", [category])
+					nodes.push(category_node);
+				})
+			} else {
+				nodes.push(node);
+			}
+		});
+			
+		console.log("nodes before being pushed to view", nodes);
+		this.cy?.add(this.nodes_to_ele(nodes));
 		this.cy?.nodes().forEach((node) => {
 			const parent = node.parent();
-
+			
 			// if have parents
 			// and isnt a subcategory itself
 			if (parent.length > 0 && node.data('type') != 'category') {
@@ -144,10 +183,11 @@ export default class KnowledgeMapView extends ItemView {
 				node.data('color', parent.data('color'));
 				node.data('outline_color', parent.data('outline_color'));
 			}
-
+			
 			//convert score to size
 			if (node.data('score') != 0) node.data('size', node.data('score'));
 		});
+		console.log("cy's nodes", this.cy?.nodes());
 	}
 
 	async onClose() {
