@@ -2,6 +2,10 @@
 
 ## Phase 1 - MVP
 
+### Bugs
+- add another way to edit data when the frontmatter is directly edited
+- nodes with same ids dont work, change it to a custom field id
+
 ### Back-end
 
 x On load, initalize nodes data from current files 
