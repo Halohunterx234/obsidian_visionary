@@ -150,6 +150,7 @@ export default class Visionary extends Plugin {
 				categories: [],
 				data: {
 					id: event.name,
+					name: event.name,
 					score: 0,
 				}
 			}
@@ -264,7 +265,7 @@ export default class Visionary extends Plugin {
 		);
 		this.nodes = fileContents.map((fileObj) => {
 				return createNode(
-					fileObj.name, undefined, undefined,
+					fileObj.name, fileObj.name, undefined, undefined,
 					fileObj['character count'], undefined,
 					undefined, 'node', []
 				);
@@ -302,6 +303,7 @@ export default class Visionary extends Plugin {
 			categories: data_node.categories,
 			data: {
 				id: data_node.data.id,
+				name: data_node.data.name,
 				color: data_node.data.color,
 				outline_color: data_node.data.color,
 				score: details['character count'],// update this
@@ -421,7 +423,7 @@ export default class Visionary extends Plugin {
 }
 
 // constructor, for creating or transferring node data
-export function createNode(id: string,
+export function createNode(id: string, name: string,
 	color: string|undefined=config.default_node_color, 
 	outline_color: string|undefined=config.default_node_outline_color,
 	score: number=0, parent: string|undefined=undefined,
@@ -431,6 +433,7 @@ export function createNode(id: string,
 			categories: categories,
 			data: {
 				id: id,
+				name: name,
 				color: color,
 				outline_color: outline_color,
 				score: score,

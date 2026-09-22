@@ -3,10 +3,17 @@ export type NodeType =
 	| "category"
 	| "placeholder";
 
+
+// format for names
+// nodes: id: "math", name: "math"
+// nodes: id: "math-subjects", name: "math", categories: [subjects]
+// categories: id: "category-math", name: "math"
+
 export interface BaseNodeData {
 	type: NodeType,
 	data: {
 		id: string;
+		name: string;
 		color?: string;
 		outline_color?: string;
 		score: number;

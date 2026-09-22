@@ -1,19 +1,8 @@
-import {
-    ItemView,
-    Plugin,
-    WorkspaceLeaf,
-} from 'obsidian'
+import { ItemView, Plugin, WorkspaceLeaf } from 'obsidian';
 
-import Visionary, {
-    VIEW_TYPE_KNOWLEDGE_MAP,
-	createNode
- } from './main.ts'
+import Visionary, { VIEW_TYPE_KNOWLEDGE_MAP, createNode } from './main.ts';
 
-import {
-	DEFAULT_SETTINGS,
-	PluginSettings,
-	SettingTab,
-} from './settings.ts';
+import { DEFAULT_SETTINGS, PluginSettings, SettingTab } from './settings.ts';
 
 import {
 	BaseNode,
@@ -66,7 +55,7 @@ export default class KnowledgeMapView extends ItemView {
 		});
 		refresh_button.addEventListener('click', async () => {
 			await this.refresh_graph();
-		})
+		});
 		this.graphEl = container.createDiv({
 			cls: 'knowledge-map-container',
 		});
@@ -94,7 +83,7 @@ export default class KnowledgeMapView extends ItemView {
 					selector: 'node',
 					style: {
 						'background-color': 'data(color)',
-						label: 'data(id)',
+						label: 'data(name)',
 						color: 'data(outline_color)', //'#ffffff',
 						'outline-color': 'data(outline_color)',
 						'outline-width': 1,
@@ -130,52 +119,62 @@ export default class KnowledgeMapView extends ItemView {
 	async refresh_graph() {
 		this.cy?.elements().remove();
 		this.cy?.layout(this.options).run();
-		
+
 		// load the categories
 		// if empty, later will discard
-		let categories: BaseNode[] = []
+		let categories: BaseNode[] = [];
 		this.plugin.categories.forEach((num, cat) => {
 			if (num == 0) {
-				return
+				return;
 			}
 			let category_node = createNode(
+				'category' + '-' + cat,
 				cat,
 				config.default_category_color,
 				config.default_category_outline_color,
 				undefined,
 				undefined,
 				undefined,
-				"category",
-				[]
+				'category',
+				[],
 			);
 			categories.push(category_node);
 		});
-		console.log("categories", this.nodes_to_ele(categories));
+		console.log('categories', this.nodes_to_ele(categories));
 		// console.log("plugin nodes", this.plugin.nodes);
 		if (categories.length > 0) this.cy?.add(this.nodes_to_ele(categories));
 
 		// grab all the nodes
 		// and time to build the rest of the stuff
 		let nodes: BaseNode[] = [];
-		this.plugin.nodes.forEach(node => {
+		this.plugin.nodes.forEach((node) => {
 			// if have categories
 			// split it for each
 			if (node.categories.length > 0) {
 				node.categories.forEach((category) => {
-					let category_node = createNode(node.data.id, undefined, undefined,
-						node.data.score, category, node.data.size, "node", [category])
+					let category_node = createNode(
+						node.data.id + '-' + category,
+						node.data.name,
+						undefined,
+						undefined,
+						node.data.score,
+						'category' + '-' + category,
+						node.data.size,
+						'node',
+						[category],
+					);
 					nodes.push(category_node);
-				})
+				});
 			} else {
 				nodes.push(node);
 			}
 		});
-			
-		console.log("nodes before being pushed to view", nodes);
+
+		console.log('nodes before being pushed to view', nodes);
 		this.cy?.add(this.nodes_to_ele(nodes));
 		this.cy?.nodes().forEach((node) => {
 			const parent = node.parent();
-			
+
 			// if have parents
 			// and isnt a subcategory itself
 			if (parent.length > 0 && node.data('type') != 'category') {
@@ -183,7 +182,7 @@ export default class KnowledgeMapView extends ItemView {
 				node.data('color', parent.data('color'));
 				node.data('outline_color', parent.data('outline_color'));
 			}
-			
+
 			//convert score to size
 			if (node.data('score') != 0) node.data('size', node.data('score'));
 		});
