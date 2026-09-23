@@ -1,16 +1,13 @@
-export type NodeType =
-	| "node"
-	| "category"
-	| "placeholder";
-
+export type NodeType = 'node' | 'category' | 'placeholder';
 
 // format for names
+// nodes: id: file_path, name: base_name, categories: []
 // nodes: id: "math", name: "math"
 // nodes: id: "math-subjects", name: "math", categories: [subjects]
 // categories: id: "category-math", name: "math"
 
 export interface BaseNodeData {
-	type: NodeType,
+	type: NodeType;
 	data: {
 		id: string;
 		name: string;
@@ -19,21 +16,21 @@ export interface BaseNodeData {
 		score: number;
 		parent?: string | null;
 		size?: number;
-	},
+	};
 	categories: string[];
 }
 export interface DataNode extends BaseNodeData {
-	type: "node";
+	type: 'node';
 }
 export interface CategoryNode extends BaseNodeData {
-	type: "category";
+	type: 'category';
 }
 export interface PlaceholderNode extends BaseNodeData {
-	type: "placeholder";
+	type: 'placeholder';
 }
 export interface CategoryMembership {
 	nodeID: string[];
-	categoryID: string[]
+	categoryID: string[];
 }
 
 export type BaseNode = BaseNodeData; //| CategoryNode | PlaceholderNode;

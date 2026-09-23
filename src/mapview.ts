@@ -1,4 +1,4 @@
-import { ItemView, Plugin, WorkspaceLeaf } from 'obsidian';
+import { ItemView, Plugin, setTooltip, WorkspaceLeaf } from 'obsidian';
 
 import Visionary, { VIEW_TYPE_KNOWLEDGE_MAP, createNode } from './main.ts';
 
@@ -20,6 +20,9 @@ export default class KnowledgeMapView extends ItemView {
 	private cy?: cytoscape.Core;
 	private graphEl: HTMLElement | null = null;
 	private plugin: Visionary;
+
+	// element states
+	private tooltip: HTMLDivElement | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: Visionary) {
 		super(leaf);
@@ -50,16 +53,19 @@ export default class KnowledgeMapView extends ItemView {
 		const container = this.contentEl;
 		container.empty();
 		container.createEl('h4', { text: 'Graph View' });
+		// refresh
 		const refresh_button = container.createEl('button', {
 			text: 'Refresh',
 		});
 		refresh_button.addEventListener('click', () => {
-			this.refresh_graph()
-			.catch((error) => console.error(error));
+			this.refresh_graph().catch((error) => console.error(error));
 		});
 		this.graphEl = container.createDiv({
 			cls: 'knowledge-map-container',
 		});
+
+		this.tooltip = document.createElement('div');
+		document.body.appendChild(this.tooltip);
 
 		const el = this.graphEl;
 		if (el == null) return;
@@ -75,7 +81,6 @@ export default class KnowledgeMapView extends ItemView {
 		this.cy = cytoscape({
 			container: el, //: document.getElementById('cy'), // container to render in
 
-			// elements: this.nodes.map(node => ({ data: node.data })),
 			elements: nodes_ele,
 
 			style: [
@@ -115,11 +120,40 @@ export default class KnowledgeMapView extends ItemView {
 			layout: this.options,
 		});
 		await this.refresh_graph();
+
+		// add any functionality to the graph view nodes
+
+		// tooltip
+		this.tooltip.style.position = 'fixed';
+		this.tooltip.style.display = 'none';
+		this.tooltip.style.backgroundColor = '#4e4646';
+
+		this.cy.on('mouseover', 'node', (event) => {
+			if (this.tooltip === null) Error('Tooltip is missing.');
+			else {
+				const node = event.target;
+
+				this.tooltip.style.display = 'block';
+				this.tooltip.textContent = node.data('id');
+
+				const position = node.renderedPosition();
+				const rect = el.getBoundingClientRect();
+
+				this.tooltip.style.left = `${rect.left + position.x + 10}px`;
+				this.tooltip.style.top = `${rect.top + position.y + 10}px`;
+			}
+		});
+
+		this.cy.on('mouseout', 'node', () => {
+			if (this.tooltip != null) this.tooltip.style.display = 'none';
+		});
 	}
 
 	async refresh_graph() {
 		this.cy?.elements().remove();
 		this.cy?.layout(this.options).run();
+
+		// reset elements
 
 		// load the categories
 		// if empty, later will discard
@@ -171,8 +205,11 @@ export default class KnowledgeMapView extends ItemView {
 			}
 		});
 
-		// console.log('nodes before being pushed to view', nodes);
+		console.log('nodes before being pushed to view', nodes);
+
 		this.cy?.add(this.nodes_to_ele(nodes));
+
+		// editing data
 		this.cy?.nodes().forEach((node) => {
 			const parent = node.parent();
 
@@ -187,10 +224,12 @@ export default class KnowledgeMapView extends ItemView {
 			//convert score to size
 			if (node.data('score') != 0) node.data('size', node.data('score'));
 		});
-		// console.log("cy's nodes", this.cy?.nodes());
+
+		console.log("cy's nodes", this.cy?.nodes());
 	}
 
 	async onClose() {
 		this.cy?.destroy();
+		this.tooltip?.remove();
 	}
 }
