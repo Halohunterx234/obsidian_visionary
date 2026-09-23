@@ -53,8 +53,9 @@ export default class KnowledgeMapView extends ItemView {
 		const refresh_button = container.createEl('button', {
 			text: 'Refresh',
 		});
-		refresh_button.addEventListener('click', async () => {
-			await this.refresh_graph();
+		refresh_button.addEventListener('click', () => {
+			this.refresh_graph()
+			.catch((error) => console.error(error));
 		});
 		this.graphEl = container.createDiv({
 			cls: 'knowledge-map-container',
@@ -140,7 +141,7 @@ export default class KnowledgeMapView extends ItemView {
 			);
 			categories.push(category_node);
 		});
-		console.log('categories', this.nodes_to_ele(categories));
+		// console.log('categories', this.nodes_to_ele(categories));
 		// console.log("plugin nodes", this.plugin.nodes);
 		if (categories.length > 0) this.cy?.add(this.nodes_to_ele(categories));
 
@@ -170,7 +171,7 @@ export default class KnowledgeMapView extends ItemView {
 			}
 		});
 
-		console.log('nodes before being pushed to view', nodes);
+		// console.log('nodes before being pushed to view', nodes);
 		this.cy?.add(this.nodes_to_ele(nodes));
 		this.cy?.nodes().forEach((node) => {
 			const parent = node.parent();
@@ -186,7 +187,7 @@ export default class KnowledgeMapView extends ItemView {
 			//convert score to size
 			if (node.data('score') != 0) node.data('size', node.data('score'));
 		});
-		console.log("cy's nodes", this.cy?.nodes());
+		// console.log("cy's nodes", this.cy?.nodes());
 	}
 
 	async onClose() {

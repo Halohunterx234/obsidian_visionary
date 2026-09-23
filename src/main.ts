@@ -10,11 +10,7 @@ import {
 	TFile,
 	TAbstractFile,
 } from 'obsidian';
-import {
-	DEFAULT_SETTINGS,
-	PluginSettings,
-	SettingTab,
-} from './settings.ts';
+import { DEFAULT_SETTINGS, PluginSettings, SettingTab } from './settings.ts';
 
 import {
 	BaseNode,
@@ -24,7 +20,6 @@ import {
 	PlaceholderNode,
 	NodeType,
 } from './nodes.ts';
-
 
 import { config } from './config.ts';
 
@@ -36,21 +31,25 @@ import cytoscape, { ElementDefinition } from 'cytoscape';
 export const VIEW_TYPE_KNOWLEDGE_MAP = 'knowledge-map';
 
 interface FileContents {
-	path: string,
-	'character count': number,
-	parent: string | undefined,
+	path: string;
+	'character count': number;
+	parent: string | undefined;
 	name: string;
 }
+
+type Frontmatter = {
+	categories?: string | string[];
+	[key: string]: unknown;
+}
+
 export default class Visionary extends Plugin {
 	settings!: PluginSettings;
 	nodes: BaseNode[] = [];
 	categories: Map<string, number> = new Map();
-	map_view: KnowledgeMapView | undefined = undefined;
 
 	async onload() {
 		await this.loadSettings();
 
-		
 		// This creates an icon in the left ribbon.
 		this.addRibbonIcon('dice', 'Sample', (_evt: MouseEvent) => {
 			// Called when the user clicks the icon.
@@ -124,10 +123,7 @@ export default class Visionary extends Plugin {
 		// graph view
 		this.registerView(
 			VIEW_TYPE_KNOWLEDGE_MAP,
-			(leaf) => {
-				this.map_view = new KnowledgeMapView(leaf, this);
-				return this.map_view
-			}
+			(leaf) => new KnowledgeMapView(leaf, this),
 			// (leaf) => new KnowledgeMapView(leaf, this),
 		);
 
@@ -136,119 +132,180 @@ export default class Visionary extends Plugin {
 			name: 'Open knowledge map',
 			callback: () => {
 				// Open your view
-				this.activateView();
+				this.activateView()
+				.catch((err: unknown) => {
+					if (typeof err === 'string') {
+						new Notice("Map View failed to render, Error: " + err);
+					}
+				})
 			},
 		});
 
 		// Dealing with events
 		// find the exact node corresponding to the file
 		// note: this is called when the vault first loads each file
-		this.registerEvent(this.app.vault.on('create', async (event: TAbstractFile) => {
-			// add to nodes
-			const newNode: DataNode = {
-				type: "node",
-				categories: [],
-				data: {
-					id: event.name,
-					name: event.name,
-					score: 0,
-				}
-			}
-			await this._addNode(newNode);
-			this.map_view?.refresh_graph();
-		}))
-		
-		this.registerEvent(this.app.vault.on('modify', async (event) => {
-			let file_details = await this.loadFileContents(event.name);
-			if (file_details === null) return;
-			console.log(file_details);
-			await this.updateNodeDetails(file_details);
-			// refresh
-			this.map_view?.refresh_graph();
-		}))
+		this.registerEvent(
+			this.app.vault.on('create', async (event: TAbstractFile) => {
+				// add to nodes
+				const newNode: DataNode = {
+					type: 'node',
+					categories: [],
+					data: {
+						id: event.name,
+						name: event.name,
+						score: 0,
+					},
+				};
+				await this._addNode(newNode).then(() => this.refreshGraph());
+			}),
+		);
 
-		this.registerEvent(this.app.vault.on('delete', async (event) => {
-			// if a note is deleted, delete all clones
-			const name = event.name.split('.')[0];
-			if (name != undefined) {
-				await this._removeNode(name, null);
-				this.map_view?.refresh_graph();
-			}
-		}))
+		this.registerEvent(
+			this.app.vault.on('modify', async (event) => {
+				await this.loadFileContents(event.name).then(
+					async (file_details) => {
+						if (file_details === null) return;
+						await this.updateNodeDetails(file_details).then(() =>
+							this.refreshGraph(),
+						);
+					},
+				);
+			}),
+		);
 
-		this.registerEvent(this.app.vault.on('rename', async (event, oldPath) => {
-			const name = event.name.split('.')[0];
-			if (name != undefined) {
-				// const node = this.createNode(name, )
-				const oldFileName = oldPath.substring(oldPath.lastIndexOf("/")+1).split(".")[0];
-				if (oldFileName != undefined) {
-					let node = this.getNode(oldFileName);
-					// to do
-					// settle after implementing categories
+		this.registerEvent(
+			this.app.vault.on('delete', async (event) => {
+				// if a note is deleted, delete all clones
+				const name = event.name.split('.')[0];
+				if (name != undefined) {
+					await this._removeNode(name, null).then(() =>
+						this.refreshGraph(),
+					);
 				}
-			}
-		}))
+			}),
+		);
+
+		this.registerEvent(
+			this.app.vault.on('rename', async (event, oldPath) => {
+				const name = event.name.split('.')[0];
+				if (name != undefined) {
+					// const node = this.createNode(name, )
+					const oldFileName = oldPath
+						.substring(oldPath.lastIndexOf('/') + 1)
+						.split('.')[0];
+					if (oldFileName != undefined) {
+						let node = this.getNode(oldFileName);
+						// to do
+						// settle after implementing categories
+					}
+				}
+			}),
+		);
 
 		// easiest way to add categories
 		// markdown code processor
-		this.registerMarkdownCodeBlockProcessor("categories", (source, el, ctx) => {
-			const categories = source
-				.split("\n")
-				.map(x => x.trim())
-				.filter(Boolean);
-			for (const category of categories) {
-				const button = el.createEl("button", {
-					text: category,
-				});
-				button.addEventListener("click", async () => {
-					const file = this.app.vault.getAbstractFileByPath(ctx.sourcePath);
-					const file_name = file?.name.split('.');
-					
-					if (!(file instanceof TFile) || file_name === undefined ||
-						file_name[0] === undefined) return;
+		this.registerMarkdownCodeBlockProcessor(
+			'categories',
+			(source, el, ctx) => {
+				const categories = source
+					.split('\n')
+					.map((x) => x.trim())
+					.filter(Boolean);
+				for (const category of categories) {
+					const button = el.createEl('button', {
+						text: category,
+					});
+					button.addEventListener('click', () => {
+						const file = this.app.vault.getAbstractFileByPath(
+							ctx.sourcePath,
+						);
+						const file_name = file?.name.split('.');
 
-					let file_basename: string = file_name[0];
+						if (
+							!(file instanceof TFile) ||
+							file_name === undefined
+						)
+							return;
 
-					// edit note's frontmatter data
-					await this.app.fileManager.processFrontMatter(
-						file, (frontmatter) => {
-					let categories = frontmatter.categories ?? [];
+						if (
+							file_name[0] === undefined
+						) return;
 
-					if (!Array.isArray(categories)) {
-						categories = [categories];
-					}
-					
-					// remove if clicked again
-					if (categories.includes(category)) {
-						categories = categories.filter((x: string) => x !== category);
-						// link to plugin's categories 
-						let number = this.categories.get(category);
-						if (number != undefined && number > 0) this.categories.set(category, number-1);
-						this.remove_category(file_basename, category);
-					} else {
-						// add if not added
-						categories.push(category);
-						console.log("categories ", categories);
-						// link to plugin's categories
-						// if its new, add
-						if (!this.categories.get(category)) this.categories.set(category, 1);
-						else {
-							let number = this.categories.get(category);
-							if (number != undefined) this.categories.set(category, number+1);
-						}
-						this.add_category(file_basename, category);
-					}
-					
-					frontmatter.categories = categories;
-					
-					
-				});
-				})
-			}
-			
-		})
+						let file_basename: string = file_name[0];
+
+						// edit note's frontmatter data
+						this.app.fileManager.processFrontMatter(
+							file,
+							(frontmatter: Frontmatter) => {
+
+								let categories: string[];
+
+								if (Array.isArray(frontmatter.categories)) {
+									categories = frontmatter.categories.filter(
+										(value): value is string => typeof value === "string"
+									);
+								} else if (typeof(frontmatter.categories) === "string") {
+									categories = [frontmatter.categories];
+								} else {
+									categories = [];	
+								}
+
+								// remove if clicked again
+								if (categories.includes(category)) {
+									categories = categories.filter(
+										(x: string) => x !== category,
+									);
+									// link to plugin's categories
+									let number = this.categories.get(category);
+									if (number != undefined && number > 0)
+										this.categories.set(
+											category,
+											number - 1,
+										);
+									this.remove_category(
+										file_basename,
+										category,
+									);
+								} else {
+									// add if not added
+									categories.push(category);
+									// link to plugin's categories
+									// if its new, add
+									if (!this.categories.get(category))
+										this.categories.set(category, 1);
+									else {
+										let number =
+											this.categories.get(category);
+										if (number != undefined)
+											this.categories.set(
+												category,
+												number + 1,
+											);
+									}
+									this.add_category(file_basename, category);
+								}
+
+								frontmatter.categories = categories;
+							},
+						).catch((error) =>  {
+							console.error(error);
+						});
+					});
+				}
+			},
+		);
 	}
 
+	refreshGraph() {
+		this.app.workspace
+			.getLeavesOfType(VIEW_TYPE_KNOWLEDGE_MAP)
+			.forEach((leaf) => {
+				if (leaf.view instanceof KnowledgeMapView) {
+					leaf.view.refresh_graph()
+					.catch((error) => console.error(error));
+				}
+			});
+	}
 	// loads a huge amt of data
 	// to-do, load from cached data.json instead unless via special command for first time
 	async loadFiles(): Promise<null> {
@@ -264,28 +321,34 @@ export default class Visionary extends Plugin {
 			}),
 		);
 		this.nodes = fileContents.map((fileObj) => {
-				return createNode(
-					fileObj.name, fileObj.name, undefined, undefined,
-					fileObj['character count'], undefined,
-					undefined, 'node', []
-				);
-			});
+			return createNode(
+				fileObj.name,
+				fileObj.name,
+				undefined,
+				undefined,
+				fileObj['character count'],
+				undefined,
+				undefined,
+				'node',
+				[],
+			);
+		});
 		return null;
 	}
 
 	// load singular file's details
-	async loadFileContents(file_name: string): Promise<FileContents | null>{
-		const file = this.app.vault.getMarkdownFiles().find(
-			(value) => value.name === file_name
-		);
+	async loadFileContents(file_name: string): Promise<FileContents | null> {
+		const file = this.app.vault
+			.getMarkdownFiles()
+			.find((value) => value.name === file_name);
 		let values = null;
 		if (file != null) {
 			values = {
 				path: file.path,
-				'character count': (await this.app.vault.cachedRead(file)).length,
+				'character count': (await this.app.vault.cachedRead(file).then((charCount) => charCount.length)),
 				parent: file.parent?.path,
 				name: file.basename,
-			}
+			};
 		}
 		return values ?? null;
 	}
@@ -296,48 +359,54 @@ export default class Visionary extends Plugin {
 	// with the exact file, we can craft a updated node and replace the existing one
 	async updateNodeDetails(details: FileContents): Promise<null> {
 		/// find the current node
-		let data_node: BaseNode | undefined = await this.getNode(details.name);
-		if (data_node === undefined) return null;
-		let updated_node: BaseNode = {
-			type: data_node.type,
-			categories: data_node.categories,
-			data: {
-				id: data_node.data.id,
-				name: data_node.data.name,
-				color: data_node.data.color,
-				outline_color: data_node.data.color,
-				score: details['character count'],// update this
-				parent: data_node.data.parent,
-				size: data_node.data.size,
-			}	
-		}
-		await this._editNode(data_node.data.id, updated_node);
+		await this.getNode(details.name)
+		.then(async (data_node) => {
+			if (data_node === undefined) return null;
+			let updated_node: BaseNode = {
+				type: data_node.type,
+				categories: data_node.categories,
+				data: {
+					id: data_node.data.id,
+					name: data_node.data.name,
+					color: data_node.data.color,
+					outline_color: data_node.data.color,
+					score: details['character count'], // update this
+					parent: data_node.data.parent,
+					size: data_node.data.size,
+				},
+			};
+			await this._editNode(data_node.data.id, updated_node).then(() => null );
+		});
 		return null;
 	}
 
 	// update a node and its categories
 	private remove_category(name: string, category: string) {
-		this.getNode(name).then((value) => {
+		this.getNode(name)
+		.then((value) => {
 			if (value != undefined) {
 				let node = value;
 				node.categories.remove(category);
-				this._editNode(name, node);
-				this.map_view?.refresh_graph();
+				this._editNode(name, node)
+				.catch((error) => console.error(error));
+				this.refreshGraph();
 			}
 		})
+		.catch((error) => console.error(error));;
 	}
 
 	private add_category(name: string, category: string) {
-		this.getNode(name).then((value) => {
+		this.getNode(name)
+		.then((value) => {
 			if (value != undefined) {
 				let node = value;
 				node.categories.push(category);
-				this._editNode(name, node);
-				console.log("updated node with category, ", this.nodes);
-				this.map_view?.refresh_graph();
+				this._editNode(name, node)
+				.catch((error) => console.error(error));
+				this.refreshGraph();
 			}
 		})
-
+		.catch((error) => console.error(error));
 	}
 
 	// node level methods
@@ -348,17 +417,20 @@ export default class Visionary extends Plugin {
 		return null;
 	}
 	// remove either all references of a node or a specific node
-	private async _removeNode(name: string, category: null | string): Promise<null> {
+	private async _removeNode(
+		name: string,
+		category: null | string,
+	): Promise<null> {
 		// if no declared categories then delete all
 		let nodes: BaseNode[] = [];
 		if (category === null) {
-			nodes = this.nodes.filter((value) => 
-				value.data.id != name
-			);
+			nodes = this.nodes.filter((value) => value.data.id != name);
 		} else {
-			nodes = this.nodes.filter((value) => 
-				!value.categories.contains(category) && 
-			value.data.id != name )
+			nodes = this.nodes.filter(
+				(value) =>
+					!value.categories.contains(category) &&
+					value.data.id != name,
+			);
 		}
 		this.nodes = nodes;
 		// to do
@@ -374,15 +446,14 @@ export default class Visionary extends Plugin {
 			if (val.data.id == name) {
 				idx = node_idx;
 			}
-		})
+		});
 		// if found, edit
-		if (idx != undefined) this.nodes.splice(idx, 1, node)
+		if (idx != undefined) this.nodes.splice(idx, 1, node);
 		return null;
 	}
 	private async getNode(name: string): Promise<undefined | BaseNode> {
-		return this.nodes.find((val) => (val.data.id === name))
+		return this.nodes.find((val) => val.data.id === name);
 	}
-
 
 	// turn on the view - obsidian docs
 	async activateView() {
@@ -400,7 +471,8 @@ export default class Visionary extends Plugin {
 			});
 		}
 
-		if (leaf != undefined) workspace.revealLeaf(leaf);
+		if (leaf != undefined) workspace.revealLeaf(leaf)
+			.catch((error) => console.error(error));
 	}
 
 	// vv important, remb to do
@@ -423,24 +495,28 @@ export default class Visionary extends Plugin {
 }
 
 // constructor, for creating or transferring node data
-export function createNode(id: string, name: string,
-	color: string|undefined=config.default_node_color, 
-	outline_color: string|undefined=config.default_node_outline_color,
-	score: number=0, parent: string|undefined=undefined,
-	size: number|undefined=config.default_node_size, type: NodeType, categories: string[]): BaseNode {
-		return {
-			type: type,
-			categories: categories,
-			data: {
-				id: id,
-				name: name,
-				color: color,
-				outline_color: outline_color,
-				score: score,
-				parent: parent,
-				size: size, 
-			}
-		}
-	}
-
-
+export function createNode(
+	id: string,
+	name: string,
+	color: string | undefined = config.default_node_color,
+	outline_color: string | undefined = config.default_node_outline_color,
+	score: number = 0,
+	parent: string | undefined = undefined,
+	size: number | undefined = config.default_node_size,
+	type: NodeType,
+	categories: string[],
+): BaseNode {
+	return {
+		type: type,
+		categories: categories,
+		data: {
+			id: id,
+			name: name,
+			color: color,
+			outline_color: outline_color,
+			score: score,
+			parent: parent,
+			size: size,
+		},
+	};
+}
