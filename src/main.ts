@@ -142,7 +142,6 @@ export default class Visionary extends Plugin {
 
 		// Dealing with events
 		// find the exact node corresponding to the file
-		// note: this is called when the vault first loads each file
 		this.registerEvent(
 			this.app.vault.on('create', async (event: TAbstractFile) => {
 				// add to nodes
@@ -152,7 +151,11 @@ export default class Visionary extends Plugin {
 					data: {
 						id: event.path,
 						name: event.name,
+						color: config.default_node_color,
+						outline_color: config.default_node_outline_color,
 						score: 0,
+						parent: null,
+						size: config.default_node_size,
 					},
 				};
 				await this._addNode(newNode).then(() => this.refreshGraph());

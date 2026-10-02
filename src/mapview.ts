@@ -124,28 +124,44 @@ export default class KnowledgeMapView extends ItemView {
 		// add any functionality to the graph view nodes
 
 		// tooltip
-		this.tooltip.style.position = 'fixed';
-		this.tooltip.style.display = 'none';
-		this.tooltip.style.backgroundColor = '#4e4646';
+		this.tooltip.setCssStyles({
+			position: 'fixed',
+			display: 'none',
+			backgroundColor: '#4e4646',
+		});
+		// this.tooltip.style.position = 'fixed';
+		// this.tooltip.style.display = 'none';
+		// this.tooltip.style.backgroundColor = '#4e4646';
 
 		this.cy.on('mouseover', 'node', (event) => {
 			if (this.tooltip === null) Error('Tooltip is missing.');
 			else {
-				const node = event.target;
-
-				this.tooltip.style.display = 'block';
-				this.tooltip.textContent = node.data('id');
-
-				const position = node.renderedPosition();
-				const rect = el.getBoundingClientRect();
-
-				this.tooltip.style.left = `${rect.left + position.x + 10}px`;
-				this.tooltip.style.top = `${rect.top + position.y + 10}px`;
+				// make sure the event orignates from the node
+				if (event.target != this.cy && event.target != null) {
+					const node = event.target;
+	
+	
+					this.tooltip.setCssStyles({
+						display: 'block',
+					});
+	
+					this.tooltip.textContent = node.data('id');
+	
+					const position = node.renderedPosition();
+					const rect = el.getBoundingClientRect();
+	
+					this.tooltip.setCssStyles({
+						left: `${rect.left + position.x + 10}px`,
+						top: `${rect.top + position.y + 10}px`,
+					});
+				}
 			}
 		});
 
 		this.cy.on('mouseout', 'node', () => {
-			if (this.tooltip != null) this.tooltip.style.display = 'none';
+			if (this.tooltip != null) {
+				this.tooltip.setCssStyles({ display: 'none' });
+			}
 		});
 	}
 
