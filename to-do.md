@@ -26,6 +26,7 @@ x Implement categories
 - Button to add placeholders and categories
 - Clicking on a node, allows to remove/add categories
 - Add collisions 
+- Tooltip blocks drag, and doesnt follow the node
 
 #### Completed
 

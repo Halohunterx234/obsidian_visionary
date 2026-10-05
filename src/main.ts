@@ -25,8 +25,6 @@ import { config } from './config.ts';
 
 import KnowledgeMapView from './mapview.ts';
 
-// graph
-import cytoscape, { ElementDefinition } from 'cytoscape';
 
 export const VIEW_TYPE_KNOWLEDGE_MAP = 'knowledge-map';
 
